@@ -8,26 +8,37 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 st.set_page_config(page_title="Analisis Sentimen RRQ", page_icon="🎮")
 
 # --- LOAD MODEL & TOKENIZER ---
-# Kita asumsikan model sudah disimpan dengan nama ini
 @st.cache_resource
-def load_my_model():
-    return tf.keras.models.load_model('model_sentimen_rrq_final.keras')
+def load_assets():
+    try:
+        # 1. Load Tokenizer (Penting!)
+        with open('tokenizer.pickle', 'rb') as handle:
+            tokenizer = pickle.load(handle)
+        
+        # 2. Load Model dengan penanganan versi
+        try:
+            model = tf.keras.models.load_model('model_sentimen_rrq_final.keras')
+        except:
+            # Jika beda versi, pakai cara ini
+            model = tf.keras.models.load_model('model_sentimen_rrq_final.keras', compile=False)
+            
+        return model, tokenizer
+    except Exception as e:
+        st.error(f"Error: Pastikan file model dan tokenizer.pickle ada di folder! {e}")
+        return None, None
 
-try:
-    model = load_my_model()
-    # Load tokenizer yang kita simpan saat training tadi
-    with open('tokenizer.pickle', 'rb') as handle:
-        tokenizer = pickle.load(handle)
-except Exception as e:
-    st.error(f"Error: Pastikan file model dan tokenizer.pickle ada di folder! {e}")
+model, tokenizer = load_assets()
 
 # --- FUNGSI PREDIKSI (HYBRID) ---
 def prediksi_sentimen(teks):
+    if model is None or tokenizer is None:
+        return "Error", "⚠️"
+
     teks_clean = teks.lower()
     
-    # Logika Manual (Biar makin akurat)
-    hujatan = ['lose', 'streak', 'cupu', 'jelek', 'kalah', 'beban', 'out', 'bubarkan', 'turu']
-    pujian = ['menang', 'gacor', 'mantap', 'gg', 'king', 'semangat', 'bangkit', 'api']
+    # Logika Manual (Biar makin akurat / Jurus Hybrid)
+    hujatan = ['lose', 'streak', 'cupu', 'jelek', 'kalah', 'beban', 'out', 'bubarkan', 'turu', 'cacat', 'aneh']
+    pujian = ['menang', 'gacor', 'mantap', 'gg', 'king', 'semangat', 'bangkit', 'api', 'viva', 'kingdom']
     
     if any(word in teks_clean for word in hujatan):
         return 'Negatif', "🔴"
@@ -39,6 +50,7 @@ def prediksi_sentimen(teks):
     padded = pad_sequences(seq, maxlen=50, padding='post')
     pred = model.predict(padded, verbose=0)
     
+    # Label sesuai urutan LabelEncoder (Negatif=0, Netral=1, Positif=2)
     labels = ['Negatif', 'Netral', 'Positif']
     hasil = labels[np.argmax(pred)]
     
@@ -65,6 +77,8 @@ if st.button("Analisis Sentimen"):
             st.success(f"{emoji} Sentimen Terdeteksi: **{hasil}**")
         elif hasil == 'Negatif':
             st.error(f"{emoji} Sentimen Terdeteksi: **{hasil}**")
+        elif hasil == 'Error':
+            st.warning("Gagal memproses. Cek file model/tokenizer.")
         else:
             st.info(f"{emoji} Sentimen Terdeteksi: **{hasil}**")
             
